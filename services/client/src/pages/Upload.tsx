@@ -102,7 +102,7 @@ const Upload: React.FC = () => {
         headers: { "Content-Type": "application/json" },
     });
     const result = await res.json();
-    navigate("/result", { state: { result } });
+    navigate("/result", { state: { result }});
   };
 
   return (

@@ -5,6 +5,7 @@ const Home: React.FC = () => {
     <div>
       <h1>Home</h1>
       <p>Welcome to Home</p>
+      <a href='/upload'>upload!</a>
     </div>
   );
 };
