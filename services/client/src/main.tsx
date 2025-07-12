@@ -3,6 +3,7 @@ import Home from './pages/Home';
 import Upload from './pages/Upload';
 import NotFound from './pages/NotFound';
 import Result from './pages/Result';
+import Share from './pages/Share';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 
@@ -15,6 +16,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <Route path="/" element={<Home />} />
       <Route path="/upload" element={<Upload />} />
       <Route path="/result" element={<Result />} />
+      <Route path="/share" element={<Share />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </BrowserRouter>

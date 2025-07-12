@@ -7,17 +7,27 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
 
-  const convert_url = env.VITE_CONVERT_URL || "http://localhost:8000";
+  const convert_url = env.VITE_CONVERT_URL;
+  const signal_url = env.VITE_SIGNAL_URL;
 
   return {
     server: {
       host: true,
       port: 5173,
+      watch: {
+        usePolling: true,
+      },
       proxy: {
         "/api/v1/convert": {
           target: convert_url,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/v1\/convert/, ""),
+        },
+        "/api/v1/signal": {
+          target: signal_url,
+          changeOrigin: true,
+          ws: true,
+          rewrite: (path) => path.replace(/^\/api\/v1\/signal/, ""),
         },
       },
     },

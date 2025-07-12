@@ -1,8 +1,5 @@
-import os
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 import datetime
 from pydantic import BaseModel
 
@@ -16,37 +13,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-logger = logging.getLogger("uvicorn.error")
-logger.setLevel(logging.INFO)
+
+class HealthzResposeModel(BaseModel):
+    message: str
 
 
-@app.get("/healthz")
+@app.get("/healthz", response_model=HealthzResposeModel)
 async def healthz():
     return {"message": "ok"}
 
 
-class RequestModel(BaseModel):
+class IPSRequestModel(BaseModel):
     data: dict
 
 
-class ResposeModel(BaseModel):
+class IPSResposeModel(BaseModel):
     message: str
     data: dict
     created_at: int
 
 
-@app.post("/ips", response_model=ResposeModel)
-async def convertion(body: RequestModel):
+@app.post("/ips", response_model=IPSResposeModel)
+async def convertion(body: IPSRequestModel):
     data = body.data
     created_at = int(datetime.datetime.now(datetime.UTC).timestamp())
     return {"message": "ok", "data": data, "created_at": created_at}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        access_log=True,
-        reload=True
-    )

@@ -1,7 +1,6 @@
 import os
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import datetime
@@ -26,18 +25,27 @@ async def healthz():
     return {"message": "ok"}
 
 
-class RequestModel(BaseModel):
-    data: dict
+class CodeRequestModel(BaseModel):
+    uuid: str
 
 
-class ResposeModel(BaseModel):
-    message: str
-    data: dict
+class CodeResposeModel(BaseModel):
+    uuid: str
     created_at: int
 
 
-@app.post("/ips", response_model=RequestModel)
-async def convertion(body: RequestModel):
-    data = body.data
+@app.post("/", response_model=CodeRequestModel)
+async def createRoom(body: CodeResposeModel):
+    sharer_uuid = body.uuid
     created_at = int(datetime.datetime.now(datetime.UTC).timestamp())
     return {"message": "ok", "data": data, "created_at": created_at}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8001,
+        access_log=True,
+        reload=True
+    )
