@@ -16,9 +16,10 @@ const Result = () => {
 
   const wsRef = useRef<WebSocket|null>(null);
   const qrDivRef = useRef<HTMLDivElement|null>(null);
-  const peerRef = useRef<RTCPeerConnection>(undefined);
+  const peerMap = useRef<Map<string, RTCPeerConnection>>(new Map());
   const offerRef = useRef<RTCSessionDescriptionInit>(undefined);
-  const toUserIdRef = useRef<string|null>(null);
+  const toUserIdSet = useRef<Set<string>>(new Set());
+  const dataChannelMap = useRef<Map<string, RTCDataChannel>>(new Map());
 
   const [convertResponse, setConvertResponse] = useState<ConvertResponse|null>(null);
   const [userId, setUserId] = useState<string|null>(uuidv4());
@@ -28,21 +29,7 @@ const Result = () => {
   const [toasts, setToasts] = useState<any[]>([]);
 
   useEffect(() => {
-    const peer = new RTCPeerConnection();
-    peer.onicecandidate = (event) => {
-      if (event.candidate && toUserIdRef.current) {
-        wsRef.current?.send(JSON.stringify({
-          type: "candidate",
-          payload: {
-            from: userId,
-            to: toUserIdRef.current,
-            candidate: event.candidate,
-          },
-          timestamp: Date.now(),
-        }));
-      }
-    }
-    peerRef.current = peer;
+    // No global peer connection created now, handled per remote user in joinedRoom
   }, [])
 
   useEffect(() => {
@@ -107,11 +94,43 @@ const Result = () => {
           break;
         case "joinedRoom":
           if (message.payload.userId !== userId) {
+            const remoteUserId = message.payload.userId;
+            if (!peerMap.current.has(remoteUserId)) {
+              const peer = new RTCPeerConnection();
+              peer.onicecandidate = (event) => {
+                if (event.candidate) {
+                  wsRef.current?.send(JSON.stringify({
+                    type: "candidate",
+                    payload: {
+                      from: userId,
+                      to: remoteUserId,
+                      candidate: event.candidate,
+                    },
+                    timestamp: Date.now(),
+                  }));
+                }
+              };
+              peerMap.current.set(remoteUserId, peer);
+
+              const dataChannel = peer.createDataChannel("file");
+              dataChannel.onopen = () => {
+                console.log("Data channel opened for user", remoteUserId);
+                dataChannel.send(JSON.stringify(state?.result?.data));
+                console.log("Data sent over data channel");
+              };
+              dataChannel.onclose = () => {
+                console.log("Data channel closed for user", remoteUserId);
+              };
+              dataChannelMap.current.set(remoteUserId, dataChannel);
+            }
+
+            toUserIdSet.current.add(remoteUserId);
+
             const toastId = uuidv4();
             setToasts(toasts => [...toasts, {
                 id: toastId,
                 type: "info",
-                message: `Code has been scanned by ${message.payload.userId}.`,
+                message: `Code has been scanned by ${remoteUserId}.`,
                 disappearing: false,
               }
             ]);
@@ -123,34 +142,23 @@ const Result = () => {
                 setToasts(toasts => toasts.filter(t => t.id !== toastId));
               }, 400);
             }, 2500);
-          
-            const dataChannel = peerRef.current?.createDataChannel("file");
-            if (dataChannel) {
-              dataChannel.onopen = () => {
-                console.log("Data channel opened");
-                dataChannel.send(JSON.stringify(state?.result?.data));
-                console.log("Data sent over data channel");
-              };
-              dataChannel.onclose = () => {
-                console.log("Data channel closed");
-              };
-            }
-
-            toUserIdRef.current = message.payload.userId;
 
             (async () => {
-              const offer = await peerRef.current?.createOffer();
-              await peerRef.current?.setLocalDescription(offer);
-              offerRef.current = offer;
-              ws.send(JSON.stringify({
-                type: "offer",
-                payload: {
-                  from: userId,
-                  to: message.payload.userId,
-                  sdp: offer?.sdp,
-                },
-                timestamp: Date.now(),
-              }));
+              const peer = peerMap.current.get(remoteUserId);
+              if (peer) {
+                const offer = await peer.createOffer();
+                await peer.setLocalDescription(offer);
+                offerRef.current = offer;
+                ws.send(JSON.stringify({
+                  type: "offer",
+                  payload: {
+                    from: userId,
+                    to: remoteUserId,
+                    sdp: offer?.sdp,
+                  },
+                  timestamp: Date.now(),
+                }));
+              }
             })();
           }
           break;
@@ -163,13 +171,27 @@ const Result = () => {
           // }
           break;
         case "answer":
-          peerRef.current?.setRemoteDescription(
-            new RTCSessionDescription({
-              type: "answer",
-              sdp: message.payload.sdp,
-          }));
+          {
+            const fromUserId = message.payload.from;
+            const peer = peerMap.current.get(fromUserId);
+            if (peer) {
+              peer.setRemoteDescription(
+                new RTCSessionDescription({
+                  type: "answer",
+                  sdp: message.payload.sdp,
+              }));
+            }
+          }
           break;
-
+        case "candidate":
+          {
+            const fromUserId = message.payload.from;
+            const peer = peerMap.current.get(fromUserId);
+            if (peer && message.payload.candidate) {
+              peer.addIceCandidate(message.payload.candidate);
+            }
+          }
+          break;
         default:
           console.warn("Unhandled message type:", message.type);
       }
