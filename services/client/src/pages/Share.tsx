@@ -1,13 +1,12 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { QrCode, AlertCircle } from "lucide-react";
+import { HeartHandshake, Info, QrCode } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { v4 as uuidv4 } from "uuid";
-
 import type { SignalingMessage } from "@/lib/signal";
+import { formatDate } from "@/lib/utils";
+import { getConfig } from "@/lib/config";
 
 const Share: React.FC = () => {
   const location = useLocation();
@@ -16,13 +15,43 @@ const Share: React.FC = () => {
   const joinCode = searchParams.get("joinCode");
   const code = searchParams.get("code");
 
+  const [infoMsg, setInfoMsg] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
+
+  const [showInfoSlide, setShowInfoSlide] = useState(false);
+
   const wsRef = useRef<WebSocket>(undefined);
   const peerRef = useRef<RTCPeerConnection>(undefined);
   const answerRef = useRef<RTCSessionDescriptionInit>(undefined);
 
-  const [userId, setUserId] = useState<string|null>(uuidv4());
+  const [userId] = useState<string|null>(uuidv4());
   const [roomId, setRoomId] = useState<string|null>(null);
-  const [receivedData, setReceivedData] = useState<string|null>(null);
+  const [receivedData, setReceivedData] = useState<any|null>(null);
+
+  // AirDrop-style animation state
+  const [showSlideIn, setShowSlideIn] = useState(false);
+
+  const [clientUrl, setClientUrl] = useState<string>("");
+
+
+  useEffect(() => {
+    getConfig().then(config => {
+      setClientUrl(import.meta.env.VITE_CLIENT_PUBLIC_URL || config.CLIENT_PUBLIC_URL || "");
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!joinCode && !code) {
+      setInfoMsg("Please scan the QR code using your favorite camera app.");
+    }
+  }, [joinCode, code]);
+
+  useEffect(() => {
+    if (infoMsg) {
+      setShowInfoSlide(false);
+      setTimeout(() => setShowInfoSlide(true), 30);
+    }
+  }, [infoMsg]);
 
   useEffect(() => {
     const peer = new RTCPeerConnection();
@@ -33,7 +62,7 @@ const Share: React.FC = () => {
         console.log("Data channel opened");
       };
       channel.onmessage = (e) => {
-        setReceivedData(e.data)
+        setReceivedData(JSON.parse(e.data));
       };
       channel.onclose = () => {
         console.log("Data channel closed");
@@ -41,7 +70,7 @@ const Share: React.FC = () => {
     };
 
     peerRef.current = peer;
-  }, [])
+  }, []);
 
   useEffect(() => {
     const ws = new WebSocket("/api/v1/signal");
@@ -76,7 +105,7 @@ const Share: React.FC = () => {
       } else {
         console.error("No join code or room ID provided.");
       }
-    }
+    };
 
     ws.onmessage = (event) => {
       const message: SignalingMessage = JSON.parse(event.data);
@@ -84,19 +113,16 @@ const Share: React.FC = () => {
         case "registered":
           break;
         case "joinedRoom":
-          if (message.payload.userId === userId) {
+          if (message.payload.success === false) {
+            setExpired(true);
+            setInfoMsg("This code is expired or invalid. Please request a new QR code.");
+          } else if (message.payload.userId === userId) {
             setRoomId(message.payload.roomId);
           }
-          // if (message.payload.userId !== userId) {
-          //   alert(`User ${message.payload.userId} has joined the room.`);
-          // }
           break;
         case "joinCodeIssued":
           break;
         case "leftRoom":
-          // if (message.payload.userId !== userId) {
-          //   alert(`User ${message.payload.userId} has left the room.`);
-          // }
           break;
         case "offer":
           (async () => {
@@ -121,11 +147,12 @@ const Share: React.FC = () => {
         case "candidate":
           peerRef.current?.addIceCandidate(
             new RTCIceCandidate(message.payload.candidate)
-          )
+          );
+          break;
         default:
           console.warn("Unhandled message type:", message.type);
       }
-    }
+    };
 
     ws.onclose = () => {};
     ws.onerror = () => {};
@@ -159,54 +186,87 @@ const Share: React.FC = () => {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-
   }, [roomId, userId]);
 
+  // AirDrop animation: show on receive, auto-hide after 3s
+  useEffect(() => {
+    if (receivedData) {
+      setShowSlideIn(true);
+      const timeout = setTimeout(() => setShowSlideIn(false), 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [receivedData]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <p>
-                { JSON.stringify(joinCode) }
-              </p>
-              <p>
-                { JSON.stringify(roomId) }
-              </p>
-              <p>
-                { JSON.stringify(userId) }
-              </p>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {roomId ? (
-              <div className="flex flex-col items-center gap-6">
-                <div className="bg-slate-900 rounded-lg px-8 py-6 shadow-inner border-2 border-blue-200 mb-2">
-                  <span className="text-3xl font-mono tracking-widest text-blue-300 select-all">{joinCode}</span>
-                </div>
-                <div className="text-slate-700 text-center text-lg font-medium">
-                  Welcome! Use this code to join or share your resource.
-                </div>
-                <Button
-                  onClick={() => navigate("/")}
-                  className="bg-blue-100 text-blue-700 hover:bg-blue-500 hover:text-white transition-colors duration-200 cursor-pointer mt-2"
-                >
-                  Go Home
-                </Button>
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
+      {infoMsg && (
+        <div
+          className={`
+            fixed top-0 left-1/2 -translate-x-1/2 z-50
+            w-full max-w-2xl px-4
+            transition-all duration-500 ease-out
+            ${showInfoSlide ? 'translate-y-0 opacity-100' : '-translate-y-32 opacity-0'}
+            pointer-events-none
+          `}
+          style={{ willChange: "transform, opacity" }}
+        >
+          <div className="flex items-center gap-3 bg-white/95 shadow-2xl rounded-2xl p-5 border border-slate-200 backdrop-blur-lg mt-3 pointer-events-auto">
+            <span className="text-slate-900 font-bold text-lg tracking-tight">
+              {infoMsg}
+            </span>
+          </div>
+        </div>
+      )}
+      {(!expired && (joinCode || code)) && (
+        <>
+          {/* AirDrop-style top animation */}
+          <div
+            className={`
+              fixed top-0 left-1/2 -translate-x-1/2 z-50
+              w-full max-w-2xl px-4
+              transition-all duration-500 ease-out
+              ${showSlideIn ? 'translate-y-0 opacity-100' : '-translate-y-32 opacity-0'}
+              pointer-events-none
+            `}
+            style={{ willChange: "transform, opacity" }}
+          >
+            <div className="flex items-center gap-3 bg-white/95 shadow-2xl rounded-2xl p-5 border border-slate-200 backdrop-blur-lg mt-3">
+              <QrCode className="text-blue-500 w-6 h-6" />
+              <span className="text-slate-900 font-bold text-lg tracking-tight">
+                Data received!
+              </span>
+            </div>
+          </div>
+          {/* Main Card */}
+          <Card className="w-full max-w-4xl mx-auto shadow-lg border-0 backdrop-blur-sm">
+            <CardHeader className="flex flex-col items-center mt-20 mb-20">
+              <HeartHandshake className="h-12 w-12 text-red-500" />
+              <CardTitle className="text-xl flex items-center">
+                Successfully Shared
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                className="text-xs text-slate-400 cursor-pointer underline m-2"
+                onClick={() => navigate("/")}
+              >
+              What is this about?
               </div>
-            ) : (
-              <Alert className="border-red-200 bg-red-50 mt-2">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                <AlertDescription className="text-red-700 font-medium">
-                  Sorry, we couldn't find your join code. Please try again or start over.
-                </AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-          { JSON.stringify(receivedData) }
-        </Card>
-      </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-4">
+                <div className="text-blue-900 text-base font-semibold">{receivedData?.version}</div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {formatDate(receivedData?.createdAt)}
+                </div>
+              </div>
+              <div className="p-4 max-h-[100vh] overflow-auto bg-slate-900 rounded-lg">
+                <pre className="text-sm text-green-400 font-mono leading-relaxed">
+                  {JSON.stringify(receivedData?.data, null, 2)}
+                </pre>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 };

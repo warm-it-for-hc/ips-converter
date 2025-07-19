@@ -31,6 +31,7 @@ class IPSRequestModel(BaseModel):
 
 class IPSResposeModel(BaseModel):
     message: str
+    version: str
     data: dict
     createdAt: int
 
@@ -39,4 +40,9 @@ class IPSResposeModel(BaseModel):
 async def convertion(body: IPSRequestModel):
     data = body.data
     created_at = int(datetime.datetime.now(datetime.UTC).timestamp())
-    return {"message": "ok", "data": data, "createdAt": created_at}
+    return {
+        "message": "ok",
+        "version": "IPS IG v1.0.0-alpha+build.1",
+        "data": data,
+        "createdAt": created_at
+    }

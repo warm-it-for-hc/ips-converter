@@ -8,6 +8,7 @@ import { CheckCircle } from "lucide-react";
 import { Info, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import type { SignalingMessage } from "@/lib/signal";
 import type { ConvertResponse } from "@/lib/response";
+import { getConfig } from "@/lib/config";
 
 const Result = () => {
   const location = useLocation();
@@ -28,8 +29,13 @@ const Result = () => {
   const [isSticky, setIsSticky] = useState<boolean>(false);
   const [toasts, setToasts] = useState<any[]>([]);
 
+  const [clientUrl, setClientUrl] = useState<string>("");
+
+
   useEffect(() => {
-    // No global peer connection created now, handled per remote user in joinedRoom
+    getConfig().then(config => {
+      setClientUrl(import.meta.env.VITE_CLIENT_PUBLIC_URL || config.CLIENT_PUBLIC_URL || "");
+    })
   }, [])
 
   useEffect(() => {
@@ -115,7 +121,7 @@ const Result = () => {
               const dataChannel = peer.createDataChannel("file");
               dataChannel.onopen = () => {
                 console.log("Data channel opened for user", remoteUserId);
-                dataChannel.send(JSON.stringify(state?.result?.data));
+                dataChannel.send(JSON.stringify(state?.result));
                 console.log("Data sent over data channel");
               };
               dataChannel.onclose = () => {
@@ -263,7 +269,7 @@ const Result = () => {
             <QRCodeSVG
               width="100%"
               height="100%"
-              value={`${import.meta.env.VITE_CLIENT_PUBLIC_URL}/share?joinCode=${joinCode}`}
+              value={`${clientUrl}/share?joinCode=${joinCode}`}
             />
             { isSticky ?
               null :
@@ -272,7 +278,7 @@ const Result = () => {
               </span> }
           </div>
           <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-4">
-            <div className="text-blue-900 text-base font-semibold">{convertResponse.message}</div>
+            <div className="text-blue-900 text-base font-semibold">{convertResponse.version}</div>
             <div className="text-xs text-slate-500 mt-1">
               {formatDate(convertResponse.createdAt)}
             </div>

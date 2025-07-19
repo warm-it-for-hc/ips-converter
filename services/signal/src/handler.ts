@@ -83,7 +83,6 @@ export class Server {
 		let ws: WebSocket | null = null
 		switch (message.type) {
 			case "joinedRoom":
-				console.log(`User joined: ${message.payload.userId}`)
 				ws = this.wsMap.get(message.target)
 				ws?.send(
 					JSON.stringify({
@@ -99,7 +98,6 @@ export class Server {
 				break
 
 			case "leftRoom":
-				console.log(`User left: ${message.payload.userId}`)
 				ws = this.wsMap.get(message.target)
 				ws?.send(
 					JSON.stringify({
@@ -113,7 +111,7 @@ export class Server {
 					})
 				)
 				break
-			
+
 			case "offer":
 				ws = this.wsMap.get(message.target)
 				ws?.send(
@@ -293,13 +291,13 @@ export class Server {
 				break
 
 			case "offer":
-				break;
+				break
 
 			case "answer":
-				break;
+				break
 
 			case "candidate":
-				break;
+				break
 
 			default:
 				console.error(`Channel message type ${message.type} unknown.`)
@@ -320,7 +318,7 @@ export class Server {
 							`host:${hostName}`,
 							JSON.stringify({
 								...resMessage,
-								target: memberId
+								target: memberId,
 							})
 						)
 					}
@@ -332,142 +330,9 @@ export class Server {
 			if (hostName) {
 				await this.redisClient.pub.publish(
 					`host:${hostName}`,
-					JSON.stringify({...message, target: message.payload.to })
+					JSON.stringify({ ...message, target: message.payload.to })
 				)
 			}
 		}
 	}
 }
-
-// 	private async handleSignalingMessage(
-// 		ws: WebSocket,
-// 		message: SignalingMessageTypes.SignalingMessage
-// 	) {
-// 		console.log("Received message:", message.type)
-// 		switch (message.type) {
-// 			case "register":
-// 				try {
-// 					await this.handleRegisterMessage(ws, message)
-// 				} catch (err) {
-// 					console.error(err)
-// 				}
-// 				break
-// 			case "unregister":
-// 				try {
-// 					await this.handleUnregisterMessage(ws, message)
-// 				} catch (err) {
-// 					console.error(err)
-// 				}
-// 				break
-// 			case "joinRoom":
-// 				try {
-// 					await this.handleJoinRoomMessage(ws, message)
-// 				} catch (err) {
-// 					console.error(err)
-// 				}
-// 				break
-// 			default:
-// 				console.error(`Message type ${message.type} unknown.`)
-// 		}
-// 	}
-
-// 	private async handleChannelMessage(message: ChannelMessageTypes.ChannelMessage) {
-// 		switch (message.type) {
-// 			case "userJoined":
-// 				console.log(`User joined: ${message.payload.userId}`)
-// 				break
-// 			case "userLeft":
-// 				console.log(`User left: ${message.payload.userId}`)
-// 				break
-// 			default:
-// 				console.error(`Channel message type ${message.type} unknown.`)
-// 		}
-// 	}
-
-// 	private async handleRegisterMessage(
-// 		ws: WebSocket,
-// 		message: SignalingMessageTypes.RegisterMessage
-// 	) {
-// 		const userId = message.payload.userId
-// 		this.wsMap.set(userId, ws)
-// 		await this.redisClient.pub.set(`user:${userId}`, this.hostName)
-// 		const response: SignalingMessageTypes.RegisteredMessage = {
-// 			type: "registered",
-// 			payload: {
-// 				userId,
-// 				success: true,
-// 			},
-// 			timestamp: Date.now(),
-// 		}
-// 		ws.send(JSON.stringify(response))
-// 	}
-
-// 	private async handleUnregisterMessage(
-// 		ws: WebSocket,
-// 		message: SignalingMessageTypes.UnregisterMessage
-// 	) {
-// 		const userId = message.payload.userId
-// 		this.wsMap.delete(userId)
-// 		await this.redisClient.pub.del(`user:${userId}`)
-// 		const response: SignalingMessageTypes.UnregisteredMessage = {
-// 			type: "unregistered",
-// 			payload: {
-// 				userId,
-// 				success: true,
-// 			},
-// 			timestamp: Date.now(),
-// 		}
-// 		ws.send(JSON.stringify(response))
-// 	}
-
-// 	private async handleJoinRoom(userId: string, roomId: string) {
-// 		const roomExists = await this.redisClient.pub.exists(`room:${roomId}`)
-// 		if (roomExists) {
-// 			const memberExists = await this.redisClient.pub.sIsMember(`room:${roomId}`, userId)
-// 			if (!memberExists) {
-// 				await this.redisClient.pub.sAdd(`room:${roomId}`, userId)
-// 				const roomMeta = await this.redisClient.pub.hGetAll(`roomMeta:${roomId}`)
-// 				await this.redisClient.pub.publish(
-// 					`host:${roomMeta.hostName}`,
-// 					JSON.stringify({
-// 						type: "userJoined",
-// 						payload: roomMeta,
-// 						timestamp: Date.now(),
-// 					})
-// 				)
-// 			}
-// 		} else {
-// 			await this.redisClient.pub.sAdd(`room:${roomId}`, userId)
-// 			await this.redisClient.pub.hSet(`roomMeta:${roomId}`, {
-// 				userId,
-// 				hostName: this.hostName,
-// 				createdAt: Date.now(),
-// 			})
-// 		}
-// 	}
-
-// 	private async handleJoinRoomMessage(
-// 		ws: WebSocket,
-// 		message: SignalingMessageTypes.JoinRoomMessage
-// 	) {
-// 		const userId = message.payload.userId
-// 		const roomId = message.payload.roomId
-// 		await this.handleJoinRoom(userId, roomId)
-
-// 		await this.redisClient.pub.hSet(`roomMeta:${roomId}`, {
-// 			userId,
-// 			hostName: this.hostName,
-// 		})
-// 		await this.redisClient.pub.sAdd(`room:${roomId}`, userId)
-
-// 		const response: SignalingMessageTypes.UnregisteredMessage = {
-// 			type: "unregistered",
-// 			payload: {
-// 				userId,
-// 				success: true,
-// 			},
-// 			timestamp: Date.now(),
-// 		}
-// 		ws.send(JSON.stringify(response))
-// 	}
-// }

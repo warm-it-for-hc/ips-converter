@@ -17,7 +17,7 @@ const Home: React.FC = () => {
           <p className="text-lg text-slate-600 leading-relaxed">
             IPS is a <span className="font-semibold">standardized summary of a patient's health data</span> based on
             <a
-              href="https://www.hl7.org/fhir/uv/ips/"
+              href="https://build.fhir.org/ig/HL7/fhir-ips/"
               target="_blank"
               rel="noopener noreferrer"
               className="underline text-blue-600 hover:text-blue-800 ml-1"
@@ -132,6 +132,7 @@ const Home: React.FC = () => {
             </p>
             <p className="m-2">
               Built with energy by Jisan &middot;
+              with effort by Suyeon &middot;
               with passion by Byeongu &middot;
               with clarity by Gyuryeon &middot;
               with &hearts; by Shane.
