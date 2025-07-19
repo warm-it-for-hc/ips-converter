@@ -9,11 +9,11 @@ services:
     env_file:
       - .env
     depends_on:
-      - converter
+      - convert
 
-  converter:
+  convert:
     build:
-      context: ./services/converter
+      context: ./services/convert
       dockerfile: Dockerfile
     ports:
       - 8001:8000

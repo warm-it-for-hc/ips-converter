@@ -1,4 +1,5 @@
-export type SignalingMessage ={
+export type SignalingMessage = {
   type: string;
-  [key: string]: any;
-}
+  payload?: any;
+  timestamp?: number;
+};

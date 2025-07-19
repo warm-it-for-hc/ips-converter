@@ -3,7 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import datetime
 from pydantic import BaseModel
 
-app = FastAPI()
+app = FastAPI(
+    root_path="/api/v1/convert",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,11 +32,11 @@ class IPSRequestModel(BaseModel):
 class IPSResposeModel(BaseModel):
     message: str
     data: dict
-    created_at: int
+    createdAt: int
 
 
 @app.post("/ips", response_model=IPSResposeModel)
 async def convertion(body: IPSRequestModel):
     data = body.data
     created_at = int(datetime.datetime.now(datetime.UTC).timestamp())
-    return {"message": "ok", "data": data, "created_at": created_at}
+    return {"message": "ok", "data": data, "createdAt": created_at}

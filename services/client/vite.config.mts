@@ -21,13 +21,11 @@ export default defineConfig(({ mode }) => {
         "/api/v1/convert": {
           target: convert_url,
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/v1\/convert/, ""),
         },
         "/api/v1/signal": {
           target: signal_url,
           changeOrigin: true,
           ws: true,
-          rewrite: (path) => path.replace(/^\/api\/v1\/signal/, ""),
         },
       },
     },
