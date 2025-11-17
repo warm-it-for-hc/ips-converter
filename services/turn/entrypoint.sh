@@ -8,8 +8,11 @@ TURN_PASSWORD="${TURN_PASSWORD:-ips-share-pass}"
 TURN_MIN_PORT="${TURN_MIN_PORT:-49160}"
 TURN_MAX_PORT="${TURN_MAX_PORT:-49200}"
 TURN_PUBLIC_IP="${TURN_PUBLIC_IP:-}"
+TURN_LISTEN_IP="${TURN_LISTEN_IP:-0.0.0.0}"
+TURN_RELAY_IP="${TURN_RELAY_IP:-0.0.0.0}"
+CONFIG_FILE="/tmp/turnserver.conf"
 
-cat >/etc/turnserver.conf <<EOF
+cat >"${CONFIG_FILE}" <<EOF
 fingerprint
 lt-cred-mech
 realm=${TURN_REALM}
@@ -19,14 +22,14 @@ no-dtls
 no-cli
 pidfile="/var/run/turnserver.pid"
 listening-port=${TURN_PORT}
-listening-ip=0.0.0.0
-relay-ip=0.0.0.0
+listening-ip=${TURN_LISTEN_IP}
+relay-ip=${TURN_RELAY_IP}
 min-port=${TURN_MIN_PORT}
 max-port=${TURN_MAX_PORT}
 EOF
 
 if [ -n "${TURN_PUBLIC_IP}" ]; then
-  echo "external-ip=${TURN_PUBLIC_IP}" >>/etc/turnserver.conf
+  echo "external-ip=${TURN_PUBLIC_IP}" >>"${CONFIG_FILE}"
 fi
 
-exec turnserver -c /etc/turnserver.conf -v
+exec turnserver -c "${CONFIG_FILE}" -v
