@@ -1,5 +1,5 @@
 import { data, useLocation, useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef, use } from "react";
+import { useState, useEffect, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -9,6 +9,7 @@ import { Info, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import type { SignalingMessage } from "@/lib/signal";
 import type { ConvertResponse } from "@/lib/response";
 import { getConfig } from "@/lib/config";
+import { buildRtcConfiguration, DEFAULT_RTC_CONFIGURATION } from "@/lib/webrtc";
 
 const Result = () => {
   const location = useLocation();
@@ -30,13 +31,37 @@ const Result = () => {
   const [toasts, setToasts] = useState<any[]>([]);
 
   const [clientUrl, setClientUrl] = useState<string>("");
+  const [rtcConfig, setRtcConfig] = useState<RTCConfiguration | null>(null);
 
 
   useEffect(() => {
-    getConfig().then(config => {
-      setClientUrl(import.meta.env.VITE_CLIENT_PUBLIC_URL || config.CLIENT_PUBLIC_URL || "");
-    })
-  }, [])
+    let mounted = true;
+    const envClientUrl = import.meta.env.VITE_CLIENT_PUBLIC_URL;
+
+    getConfig()
+      .then((config) => {
+        if (!mounted) return;
+        setClientUrl(envClientUrl || config.CLIENT_PUBLIC_URL || "");
+        setRtcConfig(buildRtcConfiguration(config));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setClientUrl(envClientUrl || "");
+        setRtcConfig(DEFAULT_RTC_CONFIGURATION);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!state) {
+      navigate("/upload");
+      return;
+    }
+    setConvertResponse(state.result);
+  }, [navigate, state]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -55,12 +80,11 @@ const Result = () => {
   }, []);
 
   useEffect(() => {
-    if (!state) {
-      navigate("/upload");
+    if (!state || !rtcConfig) {
       return;
     }
-    setConvertResponse(state.result);
 
+    const convertPayload = state.result;
     const ws = new WebSocket("/api/v1/signal");
 
     ws.onopen = () => {
@@ -102,7 +126,7 @@ const Result = () => {
           if (message.payload.userId !== userId) {
             const remoteUserId = message.payload.userId;
             if (!peerMap.current.has(remoteUserId)) {
-              const peer = new RTCPeerConnection();
+              const peer = new RTCPeerConnection(rtcConfig);
               peer.onicecandidate = (event) => {
                 if (event.candidate) {
                   wsRef.current?.send(JSON.stringify({
@@ -121,7 +145,7 @@ const Result = () => {
               const dataChannel = peer.createDataChannel("file");
               dataChannel.onopen = () => {
                 console.log("Data channel opened for user", remoteUserId);
-                dataChannel.send(JSON.stringify(state?.result));
+                dataChannel.send(JSON.stringify(convertPayload));
                 console.log("Data sent over data channel");
               };
               dataChannel.onclose = () => {
@@ -207,7 +231,11 @@ const Result = () => {
     ws.onerror = () => {};
 
     wsRef.current = ws;
-  }, []);
+
+    return () => {
+      ws.close();
+    };
+  }, [rtcConfig, roomId, state, userId]);
 
   useEffect(() => {
       const handleBeforeUnload = () => {
@@ -271,11 +299,19 @@ const Result = () => {
               height="100%"
               value={`${clientUrl}/share?joinCode=${joinCode}`}
             />
-            { isSticky ?
-              null :
-              <span className='text-xs text-slate-500 font-mono'>
-                {joinCode?.slice(0, 3)}&middot;{joinCode?.slice(3, 6)}
-              </span> }
+            <span
+              className={`text-xs text-slate-500 font-mono transition-opacity duration-200 ${
+                joinCode ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              {joinCode ? (
+                <>
+                  {joinCode.slice(0, 3)}&middot;{joinCode.slice(3, 6)}
+                </>
+              ) : (
+                "\u00A0"
+              )}
+            </span>
           </div>
           <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-4">
             <div className="text-blue-900 text-base font-semibold">{convertResponse.version}</div>

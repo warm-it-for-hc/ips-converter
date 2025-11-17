@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { SignalingMessage } from "@/lib/signal";
 import { formatDate } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
+import { buildRtcConfiguration, DEFAULT_RTC_CONFIGURATION } from "@/lib/webrtc";
 
 const Share: React.FC = () => {
   const location = useLocation();
@@ -33,13 +34,29 @@ const Share: React.FC = () => {
   const [showSlideIn, setShowSlideIn] = useState(false);
 
   const [clientUrl, setClientUrl] = useState<string>("");
+  const [rtcConfig, setRtcConfig] = useState<RTCConfiguration | null>(null);
 
 
   useEffect(() => {
-    getConfig().then(config => {
-      setClientUrl(import.meta.env.VITE_CLIENT_PUBLIC_URL || config.CLIENT_PUBLIC_URL || "");
-    })
-  }, [])
+    let mounted = true;
+    const envClientUrl = import.meta.env.VITE_CLIENT_PUBLIC_URL;
+
+    getConfig()
+      .then((config) => {
+        if (!mounted) return;
+        setClientUrl(envClientUrl || config.CLIENT_PUBLIC_URL || "");
+        setRtcConfig(buildRtcConfiguration(config));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setClientUrl(envClientUrl || "");
+        setRtcConfig(DEFAULT_RTC_CONFIGURATION);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!joinCode && !code) {
@@ -55,7 +72,9 @@ const Share: React.FC = () => {
   }, [infoMsg]);
 
   useEffect(() => {
-    const peer = new RTCPeerConnection();
+    if (!rtcConfig) return;
+
+    const peer = new RTCPeerConnection(rtcConfig);
 
     peer.ondatachannel = (event) => {
       const channel = event.channel;
@@ -89,9 +108,15 @@ const Share: React.FC = () => {
     };
 
     peerRef.current = peer;
-  }, []);
+
+    return () => {
+      peer.close();
+    };
+  }, [rtcConfig]);
 
   useEffect(() => {
+    if (!rtcConfig) return;
+
     const ws = new WebSocket("/api/v1/signal");
 
     ws.onopen = () => {
@@ -178,7 +203,11 @@ const Share: React.FC = () => {
     ws.onerror = () => {};
 
     wsRef.current = ws;
-  }, []);
+
+    return () => {
+      ws.close();
+    };
+  }, [rtcConfig, joinCode, code, userId]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
