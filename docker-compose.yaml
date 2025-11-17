@@ -32,3 +32,13 @@ services:
     image: redis
     ports:
       - 6379:6379
+
+  turn:
+    build:
+      context: ./services/turn
+    env_file:
+      - .env
+    ports:
+      - "${TURN_PORT:-3478}:${TURN_PORT:-3478}"
+      - "${TURN_PORT:-3478}:${TURN_PORT:-3478}/udp"
+    restart: unless-stopped
