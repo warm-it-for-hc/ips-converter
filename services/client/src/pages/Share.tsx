@@ -23,6 +23,7 @@ const Share: React.FC = () => {
   const wsRef = useRef<WebSocket>(undefined);
   const peerRef = useRef<RTCPeerConnection>(undefined);
   const answerRef = useRef<RTCSessionDescriptionInit>(undefined);
+  const remoteUserIdRef = useRef<string | null>(null);
 
   const [userId] = useState<string|null>(uuidv4());
   const [roomId, setRoomId] = useState<string|null>(null);
@@ -67,6 +68,24 @@ const Share: React.FC = () => {
       channel.onclose = () => {
         console.log("Data channel closed");
       };
+    };
+
+    peer.onicecandidate = (event) => {
+      if (
+        event.candidate &&
+        wsRef.current?.readyState === WebSocket.OPEN &&
+        remoteUserIdRef.current
+      ) {
+        wsRef.current.send(JSON.stringify({
+          type: "candidate",
+          payload: {
+            from: userId,
+            to: remoteUserIdRef.current,
+            candidate: event.candidate,
+          },
+          timestamp: Date.now(),
+        }));
+      }
     };
 
     peerRef.current = peer;
@@ -125,6 +144,7 @@ const Share: React.FC = () => {
         case "leftRoom":
           break;
         case "offer":
+          remoteUserIdRef.current = message.payload.from;
           (async () => {
             await peerRef.current?.setRemoteDescription(new RTCSessionDescription({
               type: "offer",
