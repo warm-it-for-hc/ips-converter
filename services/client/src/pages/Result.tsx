@@ -34,7 +34,7 @@ const Result = () => {
 	const [clientUrl, setClientUrl] = useState<string>('')
 	const [rtcConfig, setRtcConfig] = useState<RTCConfiguration | null>(null)
 
-	const avatarUrl = import.meta.env.VITE_AVATAR_URL
+	const avatarUrl = import.meta.env.VITE_AVATAR_URL ?? "https://www.vis-term.com/avatar-react-web-three"
 
 	useEffect(() => {
 		let mounted = true
@@ -319,7 +319,7 @@ const Result = () => {
 				password: 'ips001',
 			}
 
-			const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/user/signin`, {
+			const response = await fetch(`https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1/auth/user/signin`, {
 				method: 'POST',
 				body: JSON.stringify(paramsAuthenticate),
 				headers: { 'Content-Type': 'application/json' },
