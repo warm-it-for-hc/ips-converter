@@ -335,6 +335,8 @@ const Share: React.FC = () => {
                 </div>
               </div>
 
+
+				{receivedData?.data && <FhirResourceTables data={receivedData.data} />}
 					    {/* 아바타차트 */}
 			    <div style={{ width: '100%', height: 500 }}>
 				    <iframe
@@ -344,8 +346,6 @@ const Share: React.FC = () => {
 					    style={{ width: '100%', height: '100%' }}
 				    />
 			    </div>
-
-				{receivedData?.data && <FhirResourceTables data={receivedData.data} />}
 
               <div className="p-4 max-h-[100vh] overflow-auto bg-slate-900 rounded-lg">
                 <pre className="text-sm text-green-400 font-mono leading-relaxed">

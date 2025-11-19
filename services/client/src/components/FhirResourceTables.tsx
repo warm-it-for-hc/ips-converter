@@ -177,18 +177,36 @@ const formatCategories = (categories?: Array<Record<string, any>>) =>
 		.filter(Boolean)
 		.join(', ') ?? ''
 
-const formatDosage = (dosages?: Array<Record<string, any>>) =>
+const formatTiming = (dosages?: Array<Record<string, any>>) =>
 	dosages
-		?.map(dosage =>
-			dosage?.text ||
-				[
-					dosage?.route?.text,
-					dosage?.doseAndRate?.[0]?.doseQuantity?.value,
-					dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
-				]
-					.filter(Boolean)
-					.join(' '),
-		)
+		?.map(dosage => {
+			const repeat = dosage?.timing?.repeat
+			if (!repeat) return null
+			const frequency = repeat.frequency ? `${repeat.frequency}x` : ''
+			const period = repeat.period ? `${repeat.period}${repeat.periodUnit ?? ''}` : ''
+			return [frequency, period].filter(Boolean).join(' / ')
+		})
+		.filter(Boolean)
+		.join('; ') ?? ''
+
+const formatRoute = (dosages?: Array<Record<string, any>>) =>
+	dosages
+		?.map(dosage => {
+			const route = dosage?.route
+			if (!route) return null
+			const codingDisplay = formatCoding(route.coding)
+			return route?.text || codingDisplay
+		})
+		.filter(Boolean)
+		.join('; ') ?? ''
+
+const formatDoseQuantity = (dosages?: Array<Record<string, any>>) =>
+	dosages
+		?.map(dosage => {
+			const quantity = dosage?.doseAndRate?.[0]?.doseQuantity
+			if (!quantity) return null
+			return [quantity.value, quantity.unit].filter(Boolean).join(' ')
+		})
 		.filter(Boolean)
 		.join('; ') ?? ''
 
@@ -206,27 +224,30 @@ const patientColumns: ColumnDefinition[] = [
 	{ key: 'address', label: 'Address' },
 ]
 
-const medicationColumns: ColumnDefinition[] = [
-	{ key: 'display', label: 'Display' },
-	{ key: 'code', label: 'Code' },
-	{ key: 'system', label: 'System' },
-	{ key: 'text', label: 'Text' },
-	{ key: 'subject', label: 'Subject' },
-	{ key: 'status', label: 'Status' },
-	{ key: 'dosage', label: 'Dosage' },
-	{ key: 'period', label: 'Period' },
-]
-
 const conditionColumns: ColumnDefinition[] = [
+	{ key: 'text', label: 'Text' },
 	{ key: 'display', label: 'Display' },
 	{ key: 'code', label: 'Code' },
 	{ key: 'system', label: 'System' },
-	{ key: 'text', label: 'Text' },
 	{ key: 'category', label: 'Category' },
 	{ key: 'status', label: 'Status' },
 	{ key: 'recordedDate', label: 'Recorded Date' },
-	{ key: 'subject', label: 'Subject' },
+	// { key: 'subject', label: 'Subject' },
 ]
+
+const medicationColumns: ColumnDefinition[] = [
+	{ key: 'text', label: 'Text' },
+	{ key: 'display', label: 'Display' },
+	{ key: 'code', label: 'Code' },
+	{ key: 'system', label: 'System' },
+	{ key: 'timing', label: 'Timing' },
+	{ key: 'route', label: 'Route' },
+	{ key: 'dose', label: 'Dose' },
+	// { key: 'subject', label: 'Subject' },
+	// { key: 'status', label: 'Status' },
+	{ key: 'period', label: 'authoredOn' },
+]
+
 
 export const FhirResourceTables = ({ data, columnConfig }: FhirResourceTablesProps) => {
 	const patientRows = useMemo(() => {
@@ -254,7 +275,10 @@ export const FhirResourceTables = ({ data, columnConfig }: FhirResourceTablesPro
 				medication.medicationCodeableConcept || medication.code || medication.medicationCodeableConcept
 			const codingValues = extractCodingValues(concept)
 			const textValue = concept?.text || medication.medicationReference?.display || medication.name || ''
-			const dosage = formatDosage(medication.dosageInstruction || medication.dosage)
+			const dosageInstructions = medication.dosageInstruction || medication.dosage
+			const timing = formatTiming(dosageInstructions)
+			const route = formatRoute(dosageInstructions)
+			const dose = formatDoseQuantity(dosageInstructions)
 			const period =
 				formatPeriod(medication.effectivePeriod) ||
 				(medication.authoredOn ? formatDate(medication.authoredOn) : '')
@@ -263,9 +287,11 @@ export const FhirResourceTables = ({ data, columnConfig }: FhirResourceTablesPro
 				code: codingValues.code || '-',
 				system: codingValues.system || '-',
 				text: codingValues.text || textValue || '-',
+				timing: timing || '-',
+				route: route || '-',
+				dose: dose || '-',
 				subject: formatSubject(medication.subject),
 				status: medication.status || '-',
-				dosage: dosage || '-',
 				period: period || '-',
 			}
 		})
