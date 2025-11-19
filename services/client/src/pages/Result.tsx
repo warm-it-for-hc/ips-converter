@@ -327,7 +327,7 @@ const Result = () => {
 				password: 'ips001',
 			}
 
-			const response = await fetch(`${vtApiUrl}/auth/user/signin`, {
+			const response = await fetch(`https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1/auth/user/signin`, {
 				method: 'POST',
 				body: JSON.stringify(paramsAuthenticate),
 				headers: { 'Content-Type': 'application/json' },
