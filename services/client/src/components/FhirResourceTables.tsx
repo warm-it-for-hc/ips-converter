@@ -4,11 +4,17 @@ import type { ReactNode } from 'react'
 import type { ConvertResponse } from '@/lib/response'
 import { formatDate } from '@/lib/utils'
 
+type ColumnDefinition = {
+	key: string
+	label: string
+}
+
 type ResourceSummaryTableProps = {
 	title: string
-	columns: string[]
-	rows: Array<Array<ReactNode>>
+	columns: ColumnDefinition[]
+	rows: Array<Record<string, ReactNode>>
 	emptyMessage?: string
+	visibleKeys?: string[]
 }
 
 type FhirResource = Record<string, any>
@@ -19,32 +25,39 @@ const ResourceSummaryTable = ({
 	columns,
 	rows,
 	emptyMessage = 'No data available',
-}: ResourceSummaryTableProps) => (
-	<div className="bg-white border border-slate-200 rounded-lg shadow-sm">
-		<div className="px-4 py-2 border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
-			{title}
-		</div>
-		{rows.length > 0 ? (
-			<div className="overflow-x-auto">
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-100">
-						<tr>
-							{columns.map(column => (
-								<th
-									key={column}
-									className="px-4 py-2 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs"
-								>
-									{column}
-								</th>
-							))}
+	visibleKeys,
+}: ResourceSummaryTableProps) => {
+	const renderColumns = useMemo(() => {
+		if (!visibleKeys?.length) return columns
+		return columns.filter(column => visibleKeys.includes(column.key))
+	}, [columns, visibleKeys])
+
+	return (
+		<div className="bg-white border border-slate-200 rounded-lg shadow-sm">
+			<div className="px-4 py-2 border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
+				{title}
+			</div>
+			{rows.length > 0 && renderColumns.length > 0 ? (
+				<div className="overflow-x-auto">
+					<table className="min-w-full divide-y divide-slate-200 text-sm">
+						<thead className="bg-slate-100">
+							<tr>
+								{renderColumns.map(column => (
+									<th
+										key={`${title}-${column.key}`}
+										className="px-4 py-2 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs whitespace-nowrap"
+									>
+										{column.label}
+									</th>
+								))}
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-200">
 						{rows.map((row, rowIndex) => (
 							<tr key={`${title}-${rowIndex}`}>
-								{row.map((value, colIndex) => (
-									<td key={`${title}-${rowIndex}-${colIndex}`} className="px-4 py-2 text-slate-800 align-top">
-										{value ?? '-'}
+								{renderColumns.map(column => (
+									<td key={`${title}-${rowIndex}-${column.key}`} className="px-4 py-2 text-slate-800 align-top whitespace-nowrap">
+										{row[column.key] ?? '-'}
 									</td>
 								))}
 							</tr>
@@ -55,8 +68,9 @@ const ResourceSummaryTable = ({
 		) : (
 			<div className="px-4 py-6 text-sm text-slate-500">{emptyMessage}</div>
 		)}
-	</div>
-)
+		</div>
+	)
+}
 
 const getResourcesByType = (data: ConvertResponse['data'] | undefined, types: FhirResourceType): FhirResource[] => {
 	const resourceTypes = (Array.isArray(types) ? types : [types]).map(type => type.toLowerCase())
@@ -180,23 +194,55 @@ const formatDosage = (dosages?: Array<Record<string, any>>) =>
 
 type FhirResourceTablesProps = {
 	data?: ConvertResponse['data'] | null
+	columnConfig?: Partial<Record<'patient' | 'medication' | 'condition', string[]>>
 }
 
-export const FhirResourceTables = ({ data }: FhirResourceTablesProps) => {
+const patientColumns: ColumnDefinition[] = [
+	{ key: 'name', label: 'Name' },
+	{ key: 'gender', label: 'Gender' },
+	{ key: 'birthDate', label: 'Birth Date' },
+	{ key: 'identifiers', label: 'Identifiers' },
+	{ key: 'telecom', label: 'Telecom' },
+	{ key: 'address', label: 'Address' },
+]
+
+const medicationColumns: ColumnDefinition[] = [
+	{ key: 'display', label: 'Display' },
+	{ key: 'code', label: 'Code' },
+	{ key: 'system', label: 'System' },
+	{ key: 'text', label: 'Text' },
+	{ key: 'subject', label: 'Subject' },
+	{ key: 'status', label: 'Status' },
+	{ key: 'dosage', label: 'Dosage' },
+	{ key: 'period', label: 'Period' },
+]
+
+const conditionColumns: ColumnDefinition[] = [
+	{ key: 'display', label: 'Display' },
+	{ key: 'code', label: 'Code' },
+	{ key: 'system', label: 'System' },
+	{ key: 'text', label: 'Text' },
+	{ key: 'category', label: 'Category' },
+	{ key: 'status', label: 'Status' },
+	{ key: 'recordedDate', label: 'Recorded Date' },
+	{ key: 'subject', label: 'Subject' },
+]
+
+export const FhirResourceTables = ({ data, columnConfig }: FhirResourceTablesProps) => {
 	const patientRows = useMemo(() => {
 		const patients = getResourcesByType(data ?? undefined, 'patient')
 		return patients.map(patient => {
 			const identifiers = formatIdentifiers(patient.identifier)
 			const telecom = formatTelecom(patient.telecom)
 			const address = formatAddress(patient.address)
-			return [
-				formatNames(patient.name) || patient.id || '-',
-				patient.gender || '-',
-				patient.birthDate || '-',
-				identifiers || '-',
-				telecom || '-',
-				address || '-',
-			]
+			return {
+				name: formatNames(patient.name) || patient.id || '-',
+				gender: patient.gender || '-',
+				birthDate: patient.birthDate || '-',
+				identifiers: identifiers || '-',
+				telecom: telecom || '-',
+				address: address || '-',
+			}
 		})
 	}, [data])
 
@@ -212,16 +258,16 @@ export const FhirResourceTables = ({ data }: FhirResourceTablesProps) => {
 			const period =
 				formatPeriod(medication.effectivePeriod) ||
 				(medication.authoredOn ? formatDate(medication.authoredOn) : '')
-			return [
-				codingValues.display || textValue || '-',
-				codingValues.code || '-',
-				codingValues.system || '-',
-				codingValues.text || textValue || '-',
-				formatSubject(medication.subject),
-				medication.status || '-',
-				dosage || '-',
-				period || '-',
-			]
+			return {
+				display: codingValues.display || textValue || '-',
+				code: codingValues.code || '-',
+				system: codingValues.system || '-',
+				text: codingValues.text || textValue || '-',
+				subject: formatSubject(medication.subject),
+				status: medication.status || '-',
+				dosage: dosage || '-',
+				period: period || '-',
+			}
 		})
 	}, [data])
 
@@ -233,16 +279,16 @@ export const FhirResourceTables = ({ data }: FhirResourceTablesProps) => {
 				formatCoding(condition.clinicalStatus?.coding) || condition.clinicalStatus?.text || '-'
 			const category = formatCategories(condition.category) || '-'
 			const recordedDate = condition.recordedDate ? formatDate(condition.recordedDate) : '-'
-			return [
-				codingValues.display || condition.code?.text || '-',
-				codingValues.code || '-',
-				codingValues.system || '-',
-				codingValues.text || condition.code?.text || '-',
+			return {
+				display: codingValues.display || condition.code?.text || '-',
+				code: codingValues.code || '-',
+				system: codingValues.system || '-',
+				text: codingValues.text || condition.code?.text || '-',
 				category,
 				status,
 				recordedDate,
-				formatSubject(condition.subject),
-			]
+				subject: formatSubject(condition.subject),
+			}
 		})
 	}, [data])
 
@@ -252,18 +298,21 @@ export const FhirResourceTables = ({ data }: FhirResourceTablesProps) => {
 		<div className="space-y-6 my-8">
 			<ResourceSummaryTable
 				title="Patient"
-				columns={['Name', 'Gender', 'Birth Date', 'Identifiers', 'Telecom', 'Address']}
+				columns={patientColumns}
 				rows={patientRows}
+				visibleKeys={columnConfig?.patient}
 			/>
 			<ResourceSummaryTable
-				title="MedicationRequest"
-				columns={['Display', 'Code', 'System', 'Text', 'Subject', 'Status', 'Dosage', 'Period']}
+				title="MedicationRequest / Medication"
+				columns={medicationColumns}
 				rows={medicationRows}
+				visibleKeys={columnConfig?.medication}
 			/>
 			<ResourceSummaryTable
 				title="Condition"
-				columns={['Display', 'Code', 'System', 'Text', 'Category', 'Status', 'Recorded Date', 'Subject']}
+				columns={conditionColumns}
 				rows={conditionRows}
+				visibleKeys={columnConfig?.condition}
 			/>
 		</div>
 	)
