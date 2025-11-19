@@ -1,20 +1,36 @@
 import { QRCodeSVG } from 'qrcode.react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { decryptData, encryptData, resourceReclassify, severityColors } from '@/lib/avatar'
+import FhirResourceTables from '@/components/FhirResourceTables'
+import { buildAvatarAssetPayload, AvatarSyncError, postAvatarAssetToFrame } from '@/lib/avatarSync'
 import { getConfig } from '@/lib/config'
-import type { ConvertResponse, LoginDataResponse } from '@/lib/response'
+import type { ConvertResponse } from '@/lib/response'
 import type { SignalingMessage } from '@/lib/signal'
+import { formatDate } from '@/lib/utils'
 import { buildRtcConfiguration, DEFAULT_RTC_CONFIGURATION } from '@/lib/webrtc'
 import { AlertTriangle, CheckCircle, CheckCircle2, Info, XCircle } from 'lucide-react'
+
+type ToastType = 'info' | 'success' | 'error' | 'warning'
+
+type ToastMessage = {
+	id: string
+	type: ToastType
+	message: string
+	disappearing: boolean
+}
+
+type LocationState = {
+	result: ConvertResponse
+}
+
 
 const Result = () => {
 	const location = useLocation()
 	const navigate = useNavigate()
-	const state = location.state
+	const state = location.state as LocationState | null
 
 	const wsRef = useRef<WebSocket | null>(null)
 	const qrDivRef = useRef<HTMLDivElement | null>(null)
@@ -25,16 +41,49 @@ const Result = () => {
 	const avatarRef = useRef<HTMLIFrameElement>(null)
 
 	const [convertResponse, setConvertResponse] = useState<ConvertResponse | null>(null)
-	const [userId, setUserId] = useState<string | null>(uuidv4())
-	const [roomId, setRoomId] = useState<string | null>(uuidv4())
+	const [userId] = useState<string>(() => uuidv4())
+	const [roomId] = useState<string>(() => uuidv4())
 	const [joinCode, setJoinCode] = useState<string | null>(null)
 	const [isSticky, setIsSticky] = useState<boolean>(false)
-	const [toasts, setToasts] = useState<any[]>([])
+	const [toasts, setToasts] = useState<ToastMessage[]>([])
 
 	const [clientUrl, setClientUrl] = useState<string>('')
 	const [rtcConfig, setRtcConfig] = useState<RTCConfiguration | null>(null)
 
-	const avatarUrl = import.meta.env.VITE_AVATAR_URL ?? "https://www.vis-term.com/avatar-react-web-three"
+	const avatarUrl = import.meta.env.VITE_AVATAR_URL ?? 'https://www.vis-term.com/avatar-react-web-three'
+
+	const enqueueToast = useCallback((message: string, type: ToastType = 'info') => {
+		const toastId = uuidv4()
+		setToasts(prev => [...prev, { id: toastId, type, message, disappearing: false }])
+
+		setTimeout(() => {
+			setToasts(prev => prev.map(toast => (toast.id === toastId ? { ...toast, disappearing: true } : toast)))
+			setTimeout(() => {
+				setToasts(prev => prev.filter(toast => toast.id !== toastId))
+			}, 400)
+		}, 2500)
+	}, [])
+
+	const syncAvatarData = useCallback(
+		async (response: ConvertResponse) => {
+			try {
+				const assetPayload = await buildAvatarAssetPayload(response.data)
+				localStorage.setItem('token', assetPayload.token)
+				localStorage.setItem('encryptKey', assetPayload.encryptKey)
+				postAvatarAssetToFrame(avatarRef.current, avatarUrl, assetPayload)
+			} catch (error) {
+				console.error(error)
+				if (error instanceof AvatarSyncError && error.code === 'invalid-payload') {
+					alert('Parsing error')
+				} else {
+					alert('An error occurred')
+				}
+				localStorage.removeItem('token')
+				localStorage.removeItem('encryptKey')
+			}
+		},
+		[avatarUrl],
+	)
 
 	useEffect(() => {
 		let mounted = true
@@ -65,12 +114,11 @@ const Result = () => {
 		setConvertResponse(state.result)
 	}, [navigate, state])
 
-	// TODO: copy
 	useEffect(() => {
 		if (!convertResponse) return
 
-		handleSubmit()
-	}, [convertResponse])
+		void syncAvatarData(convertResponse)
+	}, [convertResponse, syncAvatarData])
 
 	useEffect(() => {
 		const handleScroll = () => {
@@ -171,27 +219,10 @@ const Result = () => {
 							dataChannelMap.current.set(remoteUserId, dataChannel)
 						}
 
-						toUserIdSet.current.add(remoteUserId)
+					toUserIdSet.current.add(remoteUserId)
 
-						const toastId = uuidv4()
-						setToasts(toasts => [
-							...toasts,
-							{
-								id: toastId,
-								type: 'info',
-								message: `Code has been scanned by ${remoteUserId}.`,
-								disappearing: false,
-							},
-						])
-						setTimeout(() => {
-							setToasts(toasts =>
-								toasts.map(t => (t.id === toastId ? { ...t, disappearing: true } : t)),
-							)
-							setTimeout(() => {
-								setToasts(toasts => toasts.filter(t => t.id !== toastId))
-							}, 400)
-						}, 2500)
-						;(async () => {
+					enqueueToast(`Code has been scanned by ${remoteUserId}.`, 'info')
+					;(async () => {
 							const peer = peerMap.current.get(remoteUserId)
 							if (peer) {
 								const offer = await peer.createOffer()
@@ -256,7 +287,7 @@ const Result = () => {
 		return () => {
 			ws.close()
 		}
-	}, [rtcConfig, roomId, state, userId])
+	}, [enqueueToast, rtcConfig, roomId, state, userId])
 
 	useEffect(() => {
 		const handleBeforeUnload = () => {
@@ -291,176 +322,6 @@ const Result = () => {
 	}, [roomId, userId])
 
 	if (!convertResponse) return null
-
-	const formatDate = (v: number | string) => {
-		if (typeof v === 'number') {
-			const ts = v > 1e12 ? v : v * 1000
-			return new Date(ts).toLocaleString()
-		}
-		return v
-	}
-
-	// TODO: copy
-	const handleSubmit = async () => {
-		if (!convertResponse) return
-
-		try {
-			const raw = JSON.stringify(convertResponse.data)
-			console.log("TODO: passed raw ********************************")
-			console.log(`${raw}`)
-			console.log("TODO: passed raw ********************************")
-
-			JSON.parse(raw)
-			console.log(raw)
-		} catch (error) {
-			alert('Parsing error')
-			return
-		}
-
-		try {
-			const paramsAuthenticate = {
-				email: 'ips001@ips001.com',
-				password: 'ips001',
-			}
-			console.log(`TODO: paramsAuth ${JSON.stringify(paramsAuthenticate)}`)
-
-			const response = await fetch(`https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1/auth/user/signin`, {
-				method: 'POST',
-				body: JSON.stringify(paramsAuthenticate),
-				headers: { 'Content-Type': 'application/json' },
-			})
-
-			// 헤더에 토큰, response에 encrypt key
-			console.log(`TODO: res ${JSON.stringify(response)}`)
-			const responseJson = await response.json()
-			console.log(`TODO: resjson ${JSON.stringify(responseJson)}`)
-
-			const token = response.headers.get('Authorization')
-			console.log(`TODO: token ${token}`)
-			const results = JSON.parse(responseJson.results) as LoginDataResponse
-			console.log(`TODO: as logindataresponse ${results}`)
-
-			console.log("TODO: ********************************")
-			console.log("TODO: lc storage token and enctypt")
-			console.log(`TODO: res ${results}`)
-			console.log(`TODO: resjson ${responseJson}`)
-			console.log(`TODO: enc ${results.encrypt_key}`)
-
-			console.log("TODO: ********************************")
-
-			if (!token || !results) return
-
-			console.log("TODO: ********************************")
-			console.log("TODO: lc storage token and enctypt")
-			console.log(`TODO: res ${results}`)
-			console.log(`TODO: resjson ${responseJson}`)
-			console.log(`TODO: token ${token}`)
-			console.log(`TODO: enc ${results.encrypt_key}`)
-
-			localStorage.setItem('token', token)
-			localStorage.setItem('encryptKey', results.encrypt_key)
-			console.log("TODO: ********************************")
-
-			handleResponseData()
-		} catch (error) {
-			alert('An error occurred')
-
-			localStorage.removeItem('token')
-			localStorage.removeItem('encryptKey')
-
-			return
-		}
-	}
-
-	// 인증 API 호출 -> 토큰, encrypt key 로컬 스토리지 저장 -> Fhir to AVC json 변환 API 호출 -> crypto로 암/복호화 -> ifame post message
-	// TODO: copy
-	const handleResponseData = async () => {
-		console.log("TODO: ********************************************")
-		// const param = JSON.parse(convertResponse.data) as [key: string, string | number | null]
-		const response = await fetch(`https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1/fhir/avc-data-converter-pcp`, {
-			method: 'POST',
-			body: JSON.stringify(convertResponse.data),
-			headers: { 'Content-Type': 'application/json' },
-		})
-		const responseJson = await response.json()
-
-		console.log(`TODO: resposejson -> ${responseJson}`) 
-
-		const encryptKey = localStorage.getItem('encryptKey')
-
-		if (!encryptKey || !responseJson || !avatarRef.current) return
-
-		// // 1. 복호화
-		const decryption = decryptData({
-			encryptKey,
-			type: 'decrypt',
-			avcJson: responseJson.results,
-		})
-
-		if (!decryption) return
-
-		// 2. 가공
-		// avc json으로 변환된 fhir json을 assest 데이터로 변환
-		const reclassifiedData = resourceReclassify(decryption)
-
-		if (!reclassifiedData) return
-
-		console.log("TODO: ********************************************")
-
-		const assetData = Object.fromEntries(
-			Object.entries(reclassifiedData.assets).map(([key, value]) => {
-				if (Array.isArray(value) && value.length > 0) {
-					const filtered = value
-						.filter(item => item.assetKey.opt_disease.length > 0)
-						.map(item => {
-							const asset = item.assetKey
-							const colorRgb = severityColors(
-								Math.max(...asset.opt_disease.map((disease: number) => disease)),
-							)
-
-							return {
-								assetKey: {
-									anatomy_code: asset.anatomy_code,
-									asset_code: asset.asset_code,
-									body_system_code: asset.body_system_code,
-									color_rgb: colorRgb.rgb,
-									opt_display: asset.opt_display,
-								},
-							}
-						})
-
-					return [key, filtered]
-				}
-
-				// 배열이 아니거나 빈 배열이면 그대로 유지
-				return [key, value]
-			}),
-		)
-
-		console.log(`TODO: supposed to be assetData -> ${assetData}`) 
-		console.log("TODO: ********************************************")
-		// 3. 암호화
-		const decryptionEncrypt = encryptData({
-			encryptKey,
-			type: 'encrypt',
-			avcJson: JSON.stringify([assetData]),
-		})
-
-		if (!decryptionEncrypt) return
-
-		// 4. postMesage
-		avatarRef.current.contentWindow?.postMessage(
-			JSON.stringify({
-				domain: 'asset-web',
-				msg: 'assetObj request!',
-				data: {
-					asset: decryptionEncrypt,
-					encrypt_key: encryptKey,
-				},
-			}),
-			avatarUrl,
-		)
-	}
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
@@ -515,12 +376,13 @@ const Result = () => {
 						/>
 					</div>
 
-					<div className="p-4 max-h-[100vh] overflow-auto bg-slate-900 rounded-lg">
-						<pre className="text-sm text-green-400 font-mono leading-relaxed">
-							{JSON.stringify(convertResponse.data, null, 2)}
-						</pre>
+					{convertResponse.data && <FhirResourceTables data={convertResponse.data} />}
 
-					</div>
+		<div className="p-4 max-h-[100vh] overflow-auto bg-slate-900 rounded-lg">
+			<pre className="text-sm text-green-400 font-mono leading-relaxed">
+				{JSON.stringify(convertResponse.data, null, 2)}
+			</pre>
+		</div>
 				</CardContent>
 			</Card>
 			{/* Toasts Floating Bottom Stacked */}
