@@ -306,8 +306,12 @@ const Result = () => {
 
 		try {
 			const raw = JSON.stringify(convertResponse.data)
+			console.log("TODO: passed raw ********************************")
+			console.log(`${raw}`)
+			console.log("TODO: passed raw ********************************")
 
 			JSON.parse(raw)
+			console.log(raw)
 		} catch (error) {
 			alert('Parsing error')
 			return
@@ -318,21 +322,44 @@ const Result = () => {
 				email: 'ips001@ips001.com',
 				password: 'ips001',
 			}
+			console.log(`TODO: paramsAuth ${JSON.stringify(paramsAuthenticate)}`)
 
 			const response = await fetch(`https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1/auth/user/signin`, {
 				method: 'POST',
 				body: JSON.stringify(paramsAuthenticate),
 				headers: { 'Content-Type': 'application/json' },
 			})
+
 			// 헤더에 토큰, response에 encrypt key
+			console.log(`TODO: res ${JSON.stringify(response)}`)
 			const responseJson = await response.json()
+			console.log(`TODO: resjson ${JSON.stringify(responseJson)}`)
+
 			const token = response.headers.get('Authorization')
-			const results = JSON.parse(responseJson.data.results) as LoginDataResponse
+			console.log(`TODO: token ${token}`)
+			const results = JSON.parse(responseJson.results) as LoginDataResponse
+			console.log(`TODO: as logindataresponse ${results}`)
+
+			console.log("TODO: ********************************")
+			console.log("TODO: lc storage token and enctypt")
+			console.log(`TODO: res ${results}`)
+			console.log(`TODO: resjson ${responseJson}`)
+			console.log(`TODO: enc ${results.encrypt_key}`)
+
+			console.log("TODO: ********************************")
 
 			if (!token || !results) return
 
+			console.log("TODO: ********************************")
+			console.log("TODO: lc storage token and enctypt")
+			console.log(`TODO: res ${results}`)
+			console.log(`TODO: resjson ${responseJson}`)
+			console.log(`TODO: token ${token}`)
+			console.log(`TODO: enc ${results.encrypt_key}`)
+
 			localStorage.setItem('token', token)
 			localStorage.setItem('encryptKey', results.encrypt_key)
+			console.log("TODO: ********************************")
 
 			handleResponseData()
 		} catch (error) {
@@ -348,13 +375,16 @@ const Result = () => {
 	// 인증 API 호출 -> 토큰, encrypt key 로컬 스토리지 저장 -> Fhir to AVC json 변환 API 호출 -> crypto로 암/복호화 -> ifame post message
 	// TODO: copy
 	const handleResponseData = async () => {
-		const param = JSON.parse(convertResponse.data) as [key: string, string | number | null]
-		const response = await fetch(`${import.meta.env.VITE_API_URL}/fhir/avc-data-converter-pcp`, {
+		console.log("TODO: ********************************************")
+		// const param = JSON.parse(convertResponse.data) as [key: string, string | number | null]
+		const response = await fetch(`https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1/fhir/avc-data-converter-pcp`, {
 			method: 'POST',
-			body: JSON.stringify(param),
+			body: JSON.stringify(convertResponse.data),
 			headers: { 'Content-Type': 'application/json' },
 		})
 		const responseJson = await response.json()
+
+		console.log(`TODO: resposejson -> ${responseJson}`) 
 
 		const encryptKey = localStorage.getItem('encryptKey')
 
@@ -364,7 +394,7 @@ const Result = () => {
 		const decryption = decryptData({
 			encryptKey,
 			type: 'decrypt',
-			avcJson: responseJson.data.results,
+			avcJson: responseJson.results,
 		})
 
 		if (!decryption) return
@@ -374,6 +404,8 @@ const Result = () => {
 		const reclassifiedData = resourceReclassify(decryption)
 
 		if (!reclassifiedData) return
+
+		console.log("TODO: ********************************************")
 
 		const assetData = Object.fromEntries(
 			Object.entries(reclassifiedData.assets).map(([key, value]) => {
@@ -405,6 +437,8 @@ const Result = () => {
 			}),
 		)
 
+		console.log(`TODO: supposed to be assetData -> ${assetData}`) 
+		console.log("TODO: ********************************************")
 		// 3. 암호화
 		const decryptionEncrypt = encryptData({
 			encryptKey,

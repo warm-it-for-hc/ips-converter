@@ -73,7 +73,7 @@ const Share: React.FC = () => {
 			// 헤더에 토큰, response에 encrypt key
 			const responseJson = await response.json()
 			const token = response.headers.get('Authorization')
-			const results = JSON.parse(responseJson.data.results) as LoginDataResponse
+			const results = JSON.parse(responseJson.results) as LoginDataResponse
 
 			if (!token || !results) return
 
@@ -100,10 +100,10 @@ const Share: React.FC = () => {
 
 	// TODO: copy
 	const handleResponseData = async () => {
-		const param = JSON.parse(receivedData.data) as [key: string, string | number | null]
-		const response = await fetch(`${import.meta.env.VITE_API_URL}/fhir/avc-data-converter-pcp`, {
+		// const param = JSON.parse(receivedData.data) as [key: string, string | number | null]
+		const response = await fetch(`https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1/fhir/avc-data-converter-pcp`, {
 			method: 'POST',
-			body: JSON.stringify(param),
+			body: JSON.stringify(convertResponse.data),
 			headers: { 'Content-Type': 'application/json' },
 		})
 		const responseJson = await response.json()
@@ -116,7 +116,7 @@ const Share: React.FC = () => {
 		const decryption = decryptData({
 			encryptKey,
 			type: 'decrypt',
-			avcJson: responseJson.data.results,
+			avcJson: responseJson.results,
 		})
 
 		if (!decryption) return
