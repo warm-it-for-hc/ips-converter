@@ -103,7 +103,7 @@ const Share: React.FC = () => {
 		// const param = JSON.parse(receivedData.data) as [key: string, string | number | null]
 		const response = await fetch(`https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1/fhir/avc-data-converter-pcp`, {
 			method: 'POST',
-			body: JSON.stringify(convertResponse.data),
+			body: JSON.stringify(receivedData.data),
 			headers: { 'Content-Type': 'application/json' },
 		})
 		const responseJson = await response.json()
