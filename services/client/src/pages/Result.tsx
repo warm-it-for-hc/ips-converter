@@ -65,6 +65,7 @@ const Result = () => {
 		setConvertResponse(state.result)
 	}, [navigate, state])
 
+	// TODO: copy
 	useEffect(() => {
 		if (!convertResponse) return
 
@@ -299,6 +300,7 @@ const Result = () => {
 		return v
 	}
 
+	// TODO: copy
 	const handleSubmit = async () => {
 		if (!convertResponse) return
 
@@ -344,6 +346,7 @@ const Result = () => {
 	}
 
 	// 인증 API 호출 -> 토큰, encrypt key 로컬 스토리지 저장 -> Fhir to AVC json 변환 API 호출 -> crypto로 암/복호화 -> ifame post message
+	// TODO: copy
 	const handleResponseData = async () => {
 		const param = JSON.parse(convertResponse.data) as [key: string, string | number | null]
 		const response = await fetch(`${import.meta.env.VITE_API_URL}/fhir/avc-data-converter-pcp`, {
@@ -467,20 +470,22 @@ const Result = () => {
 							{formatDate(convertResponse.createdAt)}
 						</div>
 					</div>
+
+					{/* 아바타차트 */}
+					<div style={{ width: '100%', height: 500 }}>
+						<iframe
+							ref={avatarRef}
+							src={avatarUrl}
+							title="WebView"
+							style={{ width: '100%', height: '100%' }}
+						/>
+					</div>
+
 					<div className="p-4 max-h-[100vh] overflow-auto bg-slate-900 rounded-lg">
 						<pre className="text-sm text-green-400 font-mono leading-relaxed">
 							{JSON.stringify(convertResponse.data, null, 2)}
 						</pre>
 
-						{/* 아바타차트 */}
-						<div style={{ width: '100%', height: 500 }}>
-							<iframe
-								ref={avatarRef}
-								src={avatarUrl}
-								title="WebView"
-								style={{ width: '100%', height: '100%' }}
-							/>
-						</div>
 					</div>
 				</CardContent>
 			</Card>

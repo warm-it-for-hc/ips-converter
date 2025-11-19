@@ -1,5 +1,5 @@
 {
-  "CLIENT_PUBLIC_URL": "https://ips.shaneoh.org",
+  "CLIENT_PUBLIC_URL": "http://192.168.50.52:5173",
   "ICE_SERVERS": [
     {
       "urls": [

@@ -9,6 +9,11 @@ import { formatDate } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
 import { buildRtcConfiguration, DEFAULT_RTC_CONFIGURATION } from "@/lib/webrtc";
 
+///////////////// AVATAR CHART /////////////////
+import { decryptData, encryptData, resourceReclassify, severityColors } from '@/lib/avatar'
+import type { ConvertResponse, LoginDataResponse } from '@/lib/response'
+///////////////// AVATAR CHART /////////////////
+
 const Share: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -26,6 +31,7 @@ const Share: React.FC = () => {
   const answerRef = useRef<RTCSessionDescriptionInit>(undefined);
   const remoteUserIdRef = useRef<string | null>(null);
 
+
   const [userId] = useState<string|null>(uuidv4());
   const [roomId, setRoomId] = useState<string|null>(null);
   const [receivedData, setReceivedData] = useState<any|null>(null);
@@ -35,6 +41,144 @@ const Share: React.FC = () => {
 
   const [clientUrl, setClientUrl] = useState<string>("");
   const [rtcConfig, setRtcConfig] = useState<RTCConfiguration | null>(null);
+
+
+  ///////////////// AVATAR CHART /////////////////
+	const avatarRef = useRef<HTMLIFrameElement>(null)
+	const avatarUrl = import.meta.env.VITE_AVATAR_URL
+
+	const handleSubmit = async () => {
+		if (!receivedData) return
+
+		try {
+			const raw = JSON.stringify(receivedData.data)
+
+			JSON.parse(raw)
+		} catch (error) {
+			alert('Parsing error')
+			return
+		}
+
+		try {
+			const paramsAuthenticate = {
+				email: 'ips001@ips001.com',
+				password: 'ips001',
+			}
+
+			const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/user/signin`, {
+				method: 'POST',
+				body: JSON.stringify(paramsAuthenticate),
+				headers: { 'Content-Type': 'application/json' },
+			})
+			// 헤더에 토큰, response에 encrypt key
+			const responseJson = await response.json()
+			const token = response.headers.get('Authorization')
+			const results = JSON.parse(responseJson.data.results) as LoginDataResponse
+
+			if (!token || !results) return
+
+			localStorage.setItem('token', token)
+			localStorage.setItem('encryptKey', results.encrypt_key)
+
+			handleResponseData()
+		} catch (error) {
+			alert('An error occurred')
+
+			localStorage.removeItem('token')
+			localStorage.removeItem('encryptKey')
+
+			return
+		}
+	}
+
+	// TODO: copy
+	useEffect(() => {
+		if (!receivedData) return
+
+		handleSubmit()
+	}, [receivedData])
+
+	// TODO: copy
+	const handleResponseData = async () => {
+		const param = JSON.parse(receivedData.data) as [key: string, string | number | null]
+		const response = await fetch(`${import.meta.env.VITE_API_URL}/fhir/avc-data-converter-pcp`, {
+			method: 'POST',
+			body: JSON.stringify(param),
+			headers: { 'Content-Type': 'application/json' },
+		})
+		const responseJson = await response.json()
+
+		const encryptKey = localStorage.getItem('encryptKey')
+
+		if (!encryptKey || !responseJson || !avatarRef.current) return
+
+		// // 1. 복호화
+		const decryption = decryptData({
+			encryptKey,
+			type: 'decrypt',
+			avcJson: responseJson.data.results,
+		})
+
+		if (!decryption) return
+
+		// 2. 가공
+		// avc json으로 변환된 fhir json을 assest 데이터로 변환
+		const reclassifiedData = resourceReclassify(decryption)
+
+		if (!reclassifiedData) return
+
+		const assetData = Object.fromEntries(
+			Object.entries(reclassifiedData.assets).map(([key, value]) => {
+				if (Array.isArray(value) && value.length > 0) {
+					const filtered = value
+						.filter(item => item.assetKey.opt_disease.length > 0)
+						.map(item => {
+							const asset = item.assetKey
+							const colorRgb = severityColors(
+								Math.max(...asset.opt_disease.map((disease: number) => disease)),
+							)
+
+							return {
+								assetKey: {
+									anatomy_code: asset.anatomy_code,
+									asset_code: asset.asset_code,
+									body_system_code: asset.body_system_code,
+									color_rgb: colorRgb.rgb,
+									opt_display: asset.opt_display,
+								},
+							}
+						})
+
+					return [key, filtered]
+				}
+
+				// 배열이 아니거나 빈 배열이면 그대로 유지
+				return [key, value]
+			}),
+		)
+
+		// 3. 암호화
+		const decryptionEncrypt = encryptData({
+			encryptKey,
+			type: 'encrypt',
+			avcJson: JSON.stringify([assetData]),
+		})
+
+		if (!decryptionEncrypt) return
+
+		// 4. postMesage
+		avatarRef.current.contentWindow?.postMessage(
+			JSON.stringify({
+				domain: 'asset-web',
+				msg: 'assetObj request!',
+				data: {
+					asset: decryptionEncrypt,
+					encrypt_key: encryptKey,
+				},
+			}),
+			avatarUrl,
+		)
+	}
 
 
   useEffect(() => {
@@ -307,6 +451,17 @@ const Share: React.FC = () => {
                   {formatDate(receivedData?.createdAt)}
                 </div>
               </div>
+
+					    {/* 아바타차트 */}
+					    <div style={{ width: '100%', height: 500 }}>
+						    <iframe
+							    ref={avatarRef}
+							    src={avatarUrl}
+							    title="WebView"
+							    style={{ width: '100%', height: '100%' }}
+						    />
+					    </div>
+
               <div className="p-4 max-h-[100vh] overflow-auto bg-slate-900 rounded-lg">
                 <pre className="text-sm text-green-400 font-mono leading-relaxed">
                   {JSON.stringify(receivedData?.data, null, 2)}
