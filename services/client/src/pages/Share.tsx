@@ -42,12 +42,28 @@ const Share: React.FC = () => {
   const [clientUrl, setClientUrl] = useState<string>("");
   const [rtcConfig, setRtcConfig] = useState<RTCConfiguration | null>(null);
 
+	const [vtApiUrl, setVtApiUrl] = useState<string>('')
 
   ///////////////// AVATAR CHART /////////////////
 	const avatarRef = useRef<HTMLIFrameElement>(null)
 	const avatarUrl = import.meta.env.VITE_AVATAR_URL
 
-	const handleSubmit = async () => {
+	useEffect(() => {
+		let mounted = true
+		const envVtApiUrl = import.meta.env.VITE_API_URL
+
+		getConfig()
+			.then(config => {
+				if (!mounted) return
+				setClientUrl(envVtApiUrl || config.VITE_API_URL || '')
+			})
+
+		return () => {
+			mounted = false
+		}
+	}, [])
+
+  const handleSubmit = async () => {
 		if (!receivedData) return
 
 		try {
@@ -65,7 +81,7 @@ const Share: React.FC = () => {
 				password: 'ips001',
 			}
 
-			const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/user/signin`, {
+			const response = await fetch(`${vtApiUrl}/auth/user/signin`, {
 				method: 'POST',
 				body: JSON.stringify(paramsAuthenticate),
 				headers: { 'Content-Type': 'application/json' },
@@ -73,7 +89,7 @@ const Share: React.FC = () => {
 			// 헤더에 토큰, response에 encrypt key
 			const responseJson = await response.json()
 			const token = response.headers.get('Authorization')
-			const results = JSON.parse(responseJson.data.results) as LoginDataResponse
+			const results = JSON.parse(responseJson.results) as LoginDataResponse
 
 			if (!token || !results) return
 
@@ -100,23 +116,22 @@ const Share: React.FC = () => {
 
 	// TODO: copy
 	const handleResponseData = async () => {
-		const param = JSON.parse(receivedData.data) as [key: string, string | number | null]
+		const param = JSON.parse(JSON.stringify(receivedData))
 		const response = await fetch(`${import.meta.env.VITE_API_URL}/fhir/avc-data-converter-pcp`, {
 			method: 'POST',
-			body: JSON.stringify(param),
+			body: JSON.stringify(param.data),
 			headers: { 'Content-Type': 'application/json' },
 		})
 		const responseJson = await response.json()
-
 		const encryptKey = localStorage.getItem('encryptKey')
 
 		if (!encryptKey || !responseJson || !avatarRef.current) return
 
-		// // 1. 복호화
+		// 1. 복호화
 		const decryption = decryptData({
 			encryptKey,
 			type: 'decrypt',
-			avcJson: responseJson.data.results,
+			avcJson: responseJson.results,
 		})
 
 		if (!decryption) return
@@ -461,6 +476,8 @@ const Share: React.FC = () => {
 							    style={{ width: '100%', height: '100%' }}
 						    />
 					    </div>
+
+              {}
 
               <div className="p-4 max-h-[100vh] overflow-auto bg-slate-900 rounded-lg">
                 <pre className="text-sm text-green-400 font-mono leading-relaxed">

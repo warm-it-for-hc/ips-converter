@@ -1,5 +1,7 @@
 {
-  "CLIENT_PUBLIC_URL": "http://192.168.50.52:5173",
+  "CLIENT_PUBLIC_URL": "http://192.168.1.173:5173",
+  "VITE_API_URL": "https://www.vis-term.com/avatar_web_gateway_operate/api-avc/v1",
+  "VITE_AVATAR_URL": "https://www.vis-term.com/avatar-react-web-three",
   "ICE_SERVERS": [
     {
       "urls": [

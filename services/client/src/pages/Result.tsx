@@ -32,6 +32,10 @@ const Result = () => {
 	const [toasts, setToasts] = useState<any[]>([])
 
 	const [clientUrl, setClientUrl] = useState<string>('')
+
+	const [vtApiUrl, setVtApiUrl] = useState<string>('')
+	const [vtAvatarUrl, setVtAvatarUrl] = useState<string>('')
+
 	const [rtcConfig, setRtcConfig] = useState<RTCConfiguration | null>(null)
 
 	const avatarUrl = import.meta.env.VITE_AVATAR_URL
@@ -39,11 +43,15 @@ const Result = () => {
 	useEffect(() => {
 		let mounted = true
 		const envClientUrl = import.meta.env.VITE_CLIENT_PUBLIC_URL
+		const envVtApiUrl = import.meta.env.VITE_API_URL
+		const envVtAvatarUrl = import.meta.env.VITE_AVATAR_URL
 
 		getConfig()
 			.then(config => {
 				if (!mounted) return
 				setClientUrl(envClientUrl || config.CLIENT_PUBLIC_URL || '')
+				setClientUrl(envVtApiUrl || config.VITE_API_URL || '')
+				setClientUrl(envVtAvatarUrl || config.VITE_AVATAR_URL || '')
 				setRtcConfig(buildRtcConfiguration(config))
 			})
 			.catch(() => {
@@ -319,7 +327,7 @@ const Result = () => {
 				password: 'ips001',
 			}
 
-			const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/user/signin`, {
+			const response = await fetch(`${vtApiUrl}/auth/user/signin`, {
 				method: 'POST',
 				body: JSON.stringify(paramsAuthenticate),
 				headers: { 'Content-Type': 'application/json' },
@@ -327,7 +335,7 @@ const Result = () => {
 			// 헤더에 토큰, response에 encrypt key
 			const responseJson = await response.json()
 			const token = response.headers.get('Authorization')
-			const results = JSON.parse(responseJson.data.results) as LoginDataResponse
+			const results = JSON.parse(responseJson.results) as LoginDataResponse
 
 			if (!token || !results) return
 
@@ -348,23 +356,22 @@ const Result = () => {
 	// 인증 API 호출 -> 토큰, encrypt key 로컬 스토리지 저장 -> Fhir to AVC json 변환 API 호출 -> crypto로 암/복호화 -> ifame post message
 	// TODO: copy
 	const handleResponseData = async () => {
-		const param = JSON.parse(convertResponse.data) as [key: string, string | number | null]
+		const param = JSON.parse(JSON.stringify(convertResponse))
 		const response = await fetch(`${import.meta.env.VITE_API_URL}/fhir/avc-data-converter-pcp`, {
 			method: 'POST',
-			body: JSON.stringify(param),
+			body: JSON.stringify(param.data),
 			headers: { 'Content-Type': 'application/json' },
 		})
 		const responseJson = await response.json()
-
 		const encryptKey = localStorage.getItem('encryptKey')
 
 		if (!encryptKey || !responseJson || !avatarRef.current) return
 
-		// // 1. 복호화
+		// 1. 복호화
 		const decryption = decryptData({
 			encryptKey,
 			type: 'decrypt',
-			avcJson: responseJson.data.results,
+			avcJson: responseJson.results,
 		})
 
 		if (!decryption) return
